@@ -1,0 +1,1 @@
+This folder contains the files and codes to produce classification models of Lending Club Data (https://www.kaggle.com/wordsforthewise/lending-club) using R with machine learning and deep learning algorithms.

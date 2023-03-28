@@ -1,0 +1,92 @@
+---
+title: "STAT652 Project 2. Logistic Regression"
+author: "Chun Yin Kong"
+output: pdf_document
+---
+
+# Initial Setup
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(mdsr)
+library(parallel)
+library(remotes) # For installing traversc/trqwe
+library(trqwe) #parallel 1
+library(tictoc)
+library(future) # parallel processing 2
+```
+
+# Step 1 Collect Data
+## Reading Data
+```{r warning=FALSE, message=FALSE, eval=FALSE}
+tic()
+accepted_data <- mcreadRDS(file="data/accepted_data.rds", mc.cores = min(parallel::detectCores(), 16))
+# Requires "pigz" on ubuntu
+toc()
+```
+
+## Analyzing data
+```{r}
+glimpse(accepted_data)
+```
+
+```{r}
+nrow(accepted_data)
+ncol(accepted_data)
+```
+
+# Step 2 Exploring and Preparing the data
+Creating 75-25 Split of Training and Testing Data
+```{r}
+set.seed(123123)
+n <- nrow(accepted_data)
+accepted_data_part <- accepted_data %>%
+  select(-id, -member_id) %>% #removing id variables
+  mutate(loan_status = as.factor(loan_status)) %>%
+  filter(str_detect(issue_d, "2012|2013|2014")) %>%
+  select(loan_status, where(is.numeric)) %>% # letting all numeric variables remain, others all drop
+  initial_split(prop=0.75)
+
+train <- accepted_data_part %>%
+  training()
+
+test <- accepted_data_part %>%
+  testing()
+
+list(train, test) %>%
+  map_int(nrow)
+
+remove(accepted_data, accepted_data_part) # removing large dataset to avoid RAM shortage
+```
+# Step 3 Training a model on the data
+In this simple linear regression, I use the annual income of the loan applicant to test whether it is appropriate to build the classifier.
+
+```{r}
+mod_log_reg <- logistic_reg(mode="classification") %>%
+  set_engine("glm") %>%
+  fit(loan_status ~ last_fico_range_high, data = train)
+```
+
+# Step 4 Evaluating Model Performance
+```{r}
+pred <- pred %>%
+  bind_cols(
+    predict(mod_log_reg, new_data = test, type = "class")
+  ) %>%
+  rename(loan_status_log = .pred_class)
+
+confusion_log_1 <- pred %>%
+  conf_mat(truth = loan_status, estimate = loan_status_log)
+
+confusion_log_1
+```
+
+Accuracy:
+```{r}
+accuracy(pred, loan_status, loan_status_log)
+```
+
+# Step 5 Improving Model Performance
+The potential improvement of training a logistic regression model can be done in two ways.
+  - Changing the variable to be fit in the explanatory variable. In this case, I fitted the logistic regression model with *last_fico_range_high* variable. We can turn the model by fitting other variables.
+  - Fitting multiple logistic regression.
